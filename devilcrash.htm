@@ -1,0 +1,369 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+	<meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+	<title>Devil's Crush/Devil Crash (TG16/PCE) password generator</title>
+	<script type="text/javascript" language="JavaScript">
+
+function getXor(pwd) {
+	return charToByte(pwd.charAt(0));
+}
+
+function getP1Bytes(pwd) {
+	return getBytes(pwd, 1, 8);
+}
+
+function getP2Bytes(pwd) {
+	if (pwd.length < 17) return null;
+	return getBytes(pwd, 9, 8);
+}
+
+function getCheck(pwd) {
+	if (pwd.length == 9 || pwd.length == 17) return null;
+	return charToByte(pwd.charAt(pwd.length-1));
+}
+
+function getScore(p) {
+	if (p === null) return null;
+	var s = 0;
+	for (var i = 0; i < 6; i+=2) {
+		s += ((p[i] | (p[i+1]<<4)) % 256) << (i*4);
+	}
+	return (s%Math.pow(2,24))*100;
+}
+
+function getLives(p) {
+	if (p === null) return null;
+	var l = 0;
+	for (var i = 0; i < 2; ++i) {
+		l |= p[i+6] << (i*4);
+	}	
+	return (l%256)-1;
+}
+
+function calculateChecksumPass(pwd) {
+	var len = pwd.length-1;
+	var sum = len;
+	var a = "A".charCodeAt(0);
+	for (var i = 0; i < len; ++i) {
+		sum = sum + charToByte(pwd.charAt(i)) % 16;
+	}
+	return sum;
+}
+
+function calculateChecksumPartial(p) {
+	if (p === null) return 0;
+	var sum = 0;
+	for (var i = 0; i < 8; ++i) {
+		sum = (sum + p[i] + 1) % 16;
+	}
+	return sum;
+}
+
+function calculateChecksum(xor, p1, p2) {
+	var sum = xor + 1 + calculateChecksumPartial(p1) + calculateChecksumPartial(p2);
+	return sum % 16;
+}
+
+function charToByte(c) {
+	return c.charCodeAt(0) - "A".charCodeAt(0);
+}
+
+function byteToChar(b) {
+	return String.fromCharCode(b + "A".charCodeAt(0));
+}
+
+function decodeBitsChar(c) {
+	var i = charToByte(c);
+	var i1 = (i >> 0) % 2;
+	var i2 = (i >> 1) % 2;
+	var i3 = (i >> 2) % 2;
+	var i4 = (i >> 3) % 2;
+	var i5 = (i >> 4) % 2;
+	return "".concat(i5, i4, i3, i2, i1);
+}
+
+function decodeBitsPassword(pwd) {
+	var result = "";
+	for (var i = 0; i <= 9; ++i) {
+		result = result + decodeBitsChar(pwd.charAt(i))+"\n";
+	}
+	return result;
+}
+
+function getBytes(pwd, start, len) {
+	var a = [];
+	for (var i = 0; i < len; ++i) {
+		a[i] = charToByte(pwd.charAt(i+start));
+	}
+	return a;
+}
+
+function bytesToChars(b) {
+	var c = "";
+	for (var i = 0; i < b.length; ++i) {
+		c = c.concat(byteToChar(b[i]));
+	}
+	return c;
+}
+
+function applyXor(xor, p1, p2) {
+	var key = xor;
+	for (var i = 0; i < 8; ++i) {
+		p1[i] = p1[i] ^ key;
+		key = (key>>1) | ((key%2)*8); // four-bit rotate right
+	}
+	if (p2 == null) return;
+	for (var i = 0; i < 8; ++i) {
+		p2[i] = p2[i] ^ key;
+		key = (key>>1) + ((key%2)*8); // four-bit rotate right
+	}
+}
+
+function equalArrays(a1, a2) {
+	if (a1.length != a2.length) return 0;
+	for (var i = 0; i < a1.length; ++i) {if (a1[i] != a2[i]) {return 0;}}
+	return 1;
+}
+
+function generatePlayerBytes(score, lives) {
+	lives += 1;
+	score = ~~(score / 100);
+	a = [];
+	for (var i = 0; i < 6; ++i) {
+		a[i] = score % 16;
+		score >>= 4;
+	}
+	for (var i = 6; i < 8; ++i) {
+		a[i] = lives % 16;
+		lives >>= 4;
+	}
+	return a;
+}
+
+function truncateScore(score) {
+	return (~~(score / 100))*100;
+}
+
+function generatePassword(xor, p1score, p1lives, p2pass, p2score, p2lives) {
+	var p1 = generatePlayerBytes(p1score, p1lives);
+	var p2 = null;
+	if (p2pass) p2 = generatePlayerBytes(p2score, p2lives);
+	applyXor(xor, p1, p2);
+	var check = calculateChecksum(xor, p1, p2);
+	
+	var str = byteToChar(xor).concat(bytesToChars(p1));
+	if (p2 != null) str = str.concat(bytesToChars(p2));
+	return str.concat(byteToChar(check));
+}
+
+function showPassword(form, table) {
+	var xor, pc, p1s, p1l, p2s, p2l;
+	xor = parseInt(form.xor.value.trim());
+	if (isNaN(xor)) {
+	xor = charToByte(form.xor.value.trim().toUpperCase());
+	}
+	if (isNaN(xor) || xor < 0 || xor > 25) { alert("Invalid Xor Key"); return; }
+	pc = parseInt(form.players.value.trim());
+	if (isNaN(pc) || pc < 1 || pc > 2) { alert("Invalid Player Count"); return; }
+	p1s = parseInt(form.p1score.value.trim());
+	if (isNaN(p1s) || p1s < 0 || p1s > 1677721500) { alert("Invalid P1 Score"); return; }
+	p1l = parseInt(form.p1lives.value.trim());
+	if (isNaN(p1l) || p1l < -1 || p1l > 254) { alert("Invalid P1 Lives"); return; }
+	p1s = truncateScore(p1s);
+	desc = "P1Score " + p1s + ", P1Lives " + p1l;
+
+	if (pc == 2) {
+		p2s = parseInt(form.p2score.value.trim());
+		if (isNaN(p2s) || p2s < 0 || p2s > 1677721500) { alert("Invalid P2 Score"); return; }
+		p2l = parseInt(form.p2lives.value.trim());
+		if (isNaN(p2l) || p2l < -1 || p2l > 254) { alert("Invalid P2 Lives"); return; }
+		p2s = truncateScore(p2s);
+		desc += ", P2Score " + p2s + ", P2Lives " + p2l;
+	}
+	
+	pass = generatePassword(xor, p1s, p1l, pc==2, p2s, p2l);
+	
+	var a = "A".codePointAt(0);
+	var z = "Z".codePointAt(0);
+	for (var i = 0; i < pass.length; ++i) {
+		var code = pass.codePointAt(i);
+		if (code < a || code > z) {
+			alert("Generated password requires invalid characters - try a different Xor Key");
+			return;
+		}
+	}
+	
+	form.p1score.value = p1s;
+	if (pc == 2)
+		form.p2score.value = p2s;
+	form.password.value = pass;
+	addPass(table, pass, desc);
+	return;
+}
+
+function addPass(table, pass, desc)
+{
+	var lastRow = table.rows.length;
+	var row = table.insertRow(lastRow);
+	var passCell = row.insertCell(0);
+	var passNode = document.createTextNode(pass);
+	passCell.appendChild(passNode);
+	var descCell = row.insertCell(1);
+	var descNode = document.createTextNode(desc);
+	descCell.appendChild(descNode);
+	return;
+}
+
+function readPassword (form, table) {
+	var password = form.password.value.trim().toUpperCase();
+
+	var players = 0;
+	switch (password.length) {
+	case 9:
+	case 10:
+		players = 1;
+	break;
+	case 17:
+	case 18:
+		players = 2;
+	break;
+	default:
+		alert:("Invalid Length");
+	return;
+	}
+	
+	var xor = getXor(password);
+	var p1 = getP1Bytes(password);
+	var p2 = getP2Bytes(password);
+	var check = getCheck(password);
+	
+	var report = "Checksum: ";
+	var sum = calculateChecksum(xor, p1, p2);
+	var sumchr = byteToChar(sum);
+	if (check != null) {
+		if (check != sum) {
+	  report += "in";
+		  password = password.substring(0, password.length-1) + sumchr;
+	}
+		report += "valid";
+	} else {
+		report += "absent";
+	password += sumchr;
+	}
+	report += " (should be "+sumchr+")";
+
+	var valid = true;
+
+	applyXor(xor, p1, p2);
+	var p1score = getScore(p1);
+	var p1lives = getLives(p1);
+	var p2score = getScore(p2);
+	var p2lives = getLives(p2);
+	
+	form.xor.value = xor;
+	form.players.value = players;
+	form.p1score.value = p1score;
+	form.p1lives.value = p1lives;
+	form.p2score.value = p2score;
+	form.p2lives.value = p2lives;
+	form.password.value = password;
+
+	if (p1score > 999999900) {
+		p1score += " (corrupt)";
+	}
+	if (p1lives < 0 || p1lives > 127) {
+		p1lives += " (infinite)";
+	}
+	else if (p1lives >= 100 && p1lives <= 109) {
+		p1lives += " (_"+(p1lives)%10+")";
+	}
+	else if (p1lives >= 110) {
+		p1lives += " (?"+(p1lives%10)+")";
+	}
+	var desc = "P1Score " + p1score + ", P1Lives " + p1lives;
+	if (players == 2) {
+		if (p2score > 999999900) {
+			p2score += " (corrupt)";
+		}
+		
+		if (p2lives < 0 || p2lives > 127) {
+			p2lives += " (infinite)";
+		} else if (p2lives >= 100 && p2lives <= 109) {
+			p2lives += " (_"+(p2lives)%10+")";
+		} else if (p2lives >= 110) {
+			p2lives += " (?"+(p2lives%10)+")";
+		}
+		
+		desc += ", P2Score " + p2score + ", P2Lives " + p2lives;
+	}
+	
+	//desc += " ----- "+decodeBitsPassword(password);
+	
+	if (valid) {addPass(table, password, desc);}
+	//alert(report);
+	return;
+}
+
+
+	</script>
+</head>
+<body>
+	<h1>Devil's Crush/Devil Crash (TG16/PCE) password generator</h1>
+	<h2>by WLivi</h2>
+	<p>changes in version 1.0: (2024-01-01)</p>
+	<ul>
+		<li>It's all new!</li>
+	</ul>
+	<h3>This password generator requires Javascipt</h2>
+	<form id="passForm" action="">
+		Player Count: <input type="text" name="players" value="1"> (1/2)<br/>
+		Player 1:
+		<ul>
+			<li>Score: <input type="text" name="p1score" value="0"> (0-999999900, units of 100. greater values will not render correctly)</li>
+			<li>Lives: <input type="text" name="p1lives" value="2"> (0-127; 128-254 or -1 for infinite. values greater than 99 will not render correctly)</li>
+		</ul>
+		Player 2:
+		<ul>
+			<li>Score: <input type="text" name="p2score" value="0"> (0-999999900, units of 100. greater values will not render correctly)</li>
+			<li>Lives: <input type="text" name="p2lives" value="2"> (0-127; 128-254 or -1 for game over. values greater than 99 will not render correctly)</li>
+		</ul>
+		Xor key: <input type="text" name="xor" value="0"> (0-15 or A-P, 16-25/Q-Z may generate invalid passwords)<br/>
+
+		<input type="button" name="generate" value="Generate" onclick="showPassword(this.form, document.getElementById('passList'))"><br><br>
+		Password: <input type="text" name="password" value="AAAAAAADAM"><br>
+		<input type="button" name="decode" value="Decode" onclick="readPassword(this.form, document.getElementById('passList'))">
+	</form>
+	<table id="passList" rules="all">
+		<caption>Valid Passwords</caption>
+		<tr><th>Password</th><th>Effect</th></tr>
+	</table>
+	<script type="text/javascript" language="JavaScript">showPassword(document.getElementById('passForm'), document.getElementById('passList'))</script>
+	<hr/>
+	<p>On the TurboGrafx-16/PC-Engine, the password system for Devil's Crush (aka Devil Crash) is relatively straight forward:</p>
+	<ul>
+		<li>First character (randomly selected) sets the basis for some XOR obfuscation.</li>
+		<li>Six characters encode player one's score, in little-endian order.</li>
+		<li>Two characters encode player one's lives, also in little-endian order.</li>
+		<li>Another six and two characters to encode player two's score and lives, if applicable.</li>
+		<li>One final character records a checksum.</li>
+	</ul>
+	<p>Yep; there's no game state recorded beyond scores and lives.  But, seeing as the game's only true objective is to max out the score counter, that's reasonable enough.</p>
+	<p>The password entry screen offers the letters A through Z, but the game produces passwords only using A through P, which can be generally treated as hexadecimal nybbles 0 through F. It is possible to concot functioning passswords which use the later letters, and I have tried my best to parse such passwords in this tool, but it will not generally produce them.</p>
+	<p>Scores are stored without the two trailing zeroes. While the game's display maxes at 999,999,900, higher values can be accepted; they'll just cause some visual corruption when being rendered. Note that such scores are generally irrelevant, as the next point scored will force the score to 999,999,900 and trigger the endgame. (An exception to this is if the added points cause the score to overflow past 1,677,721,500, in which case the score will roll over and gameplay will continue.)</p>
+	<p>Lives are stored offset by 1. (Zero lives is 1, one life is 2, and so on.) While the lives display only goes up to 99, the game can reasonably handle as many as 127 - values 100 to 109 will show a blank in the tens digit; greater values will show garbage in the tens digit. Anything outside the range 0-127 seems to act as an infinite lives cheat for player 1, or an immediate game-over for player 2.</p>
+	<p>The XOR nybble is XORed with every subsequent non-checksum nybble, being rotated one bit to the right after each subsequent nybble. So for example, an XOR character of B (binary 0001) would hit the lowest p1 score nybble with 0001, the second nybble with 1000, the third with 0100, and so on.</p>
+	<p>The checksum nybble, finally, is the sum of all the other nybbles, plus the count of other nybbles. (9 for one player, 17 for two player... or 1, I guess, since this is all modulo 16.) So far as I'm aware, no valid password has a checksum character outside A-P.</p>
+	<p>I'm not aware of any special hard-coded passwords in the TG16/PCE version of the game. If you discover some, though, please let me know.</p>
+	<hr/>
+	<p>The information presented here is derived entirely from my personal experiments running a Devil Crash HuCard in an Analogue Duo system, between 2023-12-30 and 2023-12-31. I did not consult a disassembly of the game, and while I did peruse a <a href="https://www.gilgalab.com/blog/2017/01/10/Reverse-engineering-Devil-Crash-Password-Logic.html">2017 article about the passwords in the Genesis/Megadrive version</a>, it was clear early-on that the PC-Engine game had a different system. I did briefly look at a dump of the game in a hex editor, but that was just a cursory search for text that might have been hard-coded passwords. (I didn't notice any.)</p>
+	<p>I saw early success in just trying passwords. While the game's password entry screen doesn't let you back up to previous characters, you can retry the final character as many times as you like. (Helpfully, that final character would turn out to be the checksum, with no actual impact on the meaning of the password.) So I easily bruteforced AAAAAAAAAJ and saw it was zero points, 'zero' (actually infinite) lives. This minimal baseline password (and its two-player equivalent, AAAAAAAAAAAAAAAAAB) would form the basis for much of my experimenting.</p>
+	<p>I quickly learned that the first character has a vast change on the meaning of the password: BAAAAAAAAK and BBBBBBBBBC both had ridiculous scores and large life counts. Sticking with A in that first positon kept things simple in identifying the values of each character and meanings of each position.</p>
+	<p>Identifying the behavior of that first character was made easier by the fact that you can repeatedly ask the game for your current password, and it randomly selects a different first character each time, so I was able to see all the different permutations of AAAAAAAAAJ. Writing a tool to convert the passwords into strings of bits, I was able to look at a bunch of these permutations and identify what operations were being performed.</p>
+	<p>Working out what to do with the fifth bits from characters Q-Z took me a while. For the scores and lives characters, it was easy enough - AQAAAAAAAJ worked out to be equivalent to AABAAAAAAK, with that fifth bit carrying forward into the low bit of the next nybble. Subsequent experiments showed that the 5th bit of the final nybbles of the score and lives did nothing, and I later realized that this applied to every second value nybble - AAQAAAAAAJ was equivalent to AAAAAAAAAJ. Which makes sense - they were combining nybbles into bytes, and these extra bits would have landed outside the byte.</p>
+	<p>I was baffled by my observations regarding a fifth bit in the XOR character. QAAAAAAAAJ proved equivalent to BBBAAAAAAM, RAAAAAAAAK to BABAAAAAAL, SAAAAAAAAL to DBAAAAAAAN, and TAAAAAAAAM to DAAAAAAAAM. Clearly it was having some effect, but I didn't get it at first. I tried bolting on some extra code to my XOR function to try to account for this, but I couldn't quite get there... until I took a step back, remembering that the game's behavior was likely the result of code written for nybbles being fed an unaccounted-for five bit value. I didn't need to do anything special to replicate the observed behavior, except for removing the modulo 16 I had been applying 'for safety' to the initial xor value. The first character of player one's score will get its fifth bit toggled - effectively setting the low bit of the second score nybble - and with the first rotate-right, the fifth XOR bit moves into the fourth position, superceding the original ones-position bit for the rest of the password.</p>
+	<p>It's been quite some time since I last did something like this - it's 2024 now, and my previous work was on the <a href="bomberman2.htm">Bomberman II password system</a>, in 2006.  All told, this was a fun project.</p>
+	<hr/>
+	<a href="index.htm">Back to WLivi's retro game password generators</a>
+</body>
+</html>

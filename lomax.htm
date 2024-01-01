@@ -1,0 +1,207 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+	<meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+	<title>"The Adventures of Lomax" Password Generator</title>
+	<script type="text/javascript" language="JavaScript">
+
+function generatePassword(section, lives, credits) {
+	var digits = new Array();
+	var password = "";
+	var index;
+	section--;
+
+	// data
+	digits[2] = section % 4;
+	digits[3] = parseInt(section / 4) % 4;
+	digits[4] = (parseInt(section / 16) % 2) ^ ((lives%2) * 2) ^ 1;
+	digits[5] = (parseInt(lives / 2) % 4) ^ 3;
+	digits[6] = (parseInt(lives / 8) % 4) ^ 1;
+	digits[7] = credits % 4;
+	// checksum
+	digits[0] = digits[2] ^ digits[4] ^ digits[6] ^ 2;
+	digits[1] = digits[3] ^ digits[5] ^ digits[7];
+
+	for (index = 0; index < 8; ++index) {
+		switch(digits[index]) {
+			case 0: password += 'T'; break;
+			case 1: password += 'C'; break;
+			case 2: password += 'S'; break;
+			case 3: password += 'X'; break;
+			default: password += '?';
+		}
+	}
+	return password;
+}
+
+function showPassword(form, table) {
+	var s, l, c, pass, desc;
+	s = parseInt(form.section.value);
+	if (isNaN(s) || s < 1 || s > 22) {
+		alert("Invalid Section");
+		return;
+	}
+	l = parseInt(form.lives.value);
+	if (isNaN(l) || l < 0 || l > 31) {
+		alert("Invalid Lives");
+		return;
+	}
+	c = parseInt(form.credits.value);
+	if (isNaN(c) || c < 0 || c > 3) {
+		alert("Invalid Credits");
+		return;
+	}
+	desc = "Section " + s + ", Lives " + l + ", Credits " + c;
+	pass = generatePassword(s,l,c);
+	form.password.value = pass;
+	addPass(table, pass, desc);
+}
+
+function addPass(table, pass, desc)
+{
+	var lastRow = table.rows.length;
+	var row = table.insertRow(lastRow);
+	var passCell = row.insertCell(0);
+	var passNode = document.createTextNode(pass);
+	passCell.appendChild(passNode);
+	var descCell = row.insertCell(1);
+	var descNode = document.createTextNode(desc);
+	descCell.appendChild(descNode);
+}
+
+function readPassword (form, table) {
+	var password = form.password.value.toUpperCase();
+	var digits = new Array();
+	var checksum = new Array();
+	var checksumchar = new Array();
+	var section, lives, credits, index, desc;
+	var report = "";
+	var valid = true;
+
+	for (index = 0; index < 8; ++index) {
+		switch(password.substring(index, index+1)) {
+			case 'T':
+				digits[index] = 0;
+				break;
+			case 'C':
+				digits[index] = 1;
+				break;
+			case 'S':
+				digits[index] = 2;
+				break;
+			case 'X':
+				digits[index] = 3;
+				break;
+			default:
+				alert("Invalid Password");
+				return;
+		}
+	}
+
+	checksum[0] = digits[2] ^ digits[4] ^ digits[6] ^ 2;
+	checksum[1] = digits[3] ^ digits[5] ^ digits[7];
+	form.section.value = section = 1 + digits[2] + (digits[3] * 4) + (((digits[4]%2)^1)*16);
+	form.lives.value = lives = parseInt(digits[4]/2) + ((digits[5]^3)*2) + ((digits[6]^1)*8);
+	form.credits.value = credits = digits[7];
+
+	for (index = 0; index < 2; ++index) {
+		report += "Checksum " + (index+1) + ": ";
+		switch(checksum[index]) {
+			case 0:
+				checksumchar[index] = 'T';
+				break;
+			case 1:
+				checksumchar[index] = 'C';
+				break;
+			case 2:
+				checksumchar[index] = 'S';
+				break;
+			case 3:
+				checksumchar[index] = 'X';
+				break;
+			default:
+				checksumchar[index] = '?';
+		}
+		if (checksum[index] == digits[index]) {
+			report += "correct\n";
+		} else {
+			valid = false;
+			report += "incorrect (should be " + checksumchar[index] + ")\n";
+		}
+	}
+	desc = "Section " + section + ", Lives " + lives + ", Credits " + credits;
+	report += "Section "
+	if (section > 22) {
+		valid = false;
+		report += "in";
+	} else {
+		password = checksumchar[0]+checksumchar[1]+password.substring(2,8);
+		addPass(table, password, desc);
+	}
+	report += "valid\n"
+	form.password.value = password;
+	if (!valid) {
+		alert(report + desc);
+	}
+}
+
+	</script>
+</head>
+<body>
+	<h1>The Adventures of Lomax password generator</h1>
+	<h2>by WLvi</h2>
+	<p>changes in version 1.1: (2024-01-01)</p>
+	<ul>
+		<li>text updates</li>
+		<li>parsing valid passwords no longer causes an alert</li>
+		<li>Github upload</li>
+	</ul>
+	<hr/>
+	<form id="passForm" action="">
+		Section: <input type="text" name="section" value="1"> (1-22)<br/>
+		Lives: <input type="text" name="lives" value="3"> (0-31)<br/>
+		Credits: <input type="text" name="credits" value="3"> (0-3)<br/>
+		<input type="button" name="generate" value="Generate" onclick="showPassword(this.form, document.getElementById('passList'))"><br/><br/>
+		Password: <input type="text" name="password" value="TCTTXSCX"><br/>
+		<input type="button" name="decode" value="Decode" onclick="readPassword(this.form, document.getElementById('passList'))">
+	</form>
+	<table id="passList" rules="all">
+		<caption>Valid Passwords</caption>
+		<tr><th>Password</th><th>Effect</th></tr>
+	</table>
+	<script type="text/javascript" language="JavaScript">showPassword(document.getElementById('passForm'), document.getElementById('passList'))</script>
+	<hr/>
+	<p>This password generater was created in 2006, based on Erickson Deveza's and Victoria Torzar's <a href="https://gamefaqs.gamespot.com/ps/196548-the-adventures-of-lomax/faqs/40484">Lomax Password System Guide</a>. The guide's original table-lookups have been adapted into a series of calculations, and automated.</p>
+	<p>The formula is...	(remember that % is modulo, and ^ is XOR)</p>
+	
+	<code>
+	section--;<br/>
+	<br/>
+	digits[2] = section % 4;<br/>
+	digits[3] = (section / 4) % 4;<br/>
+	digits[4] = ((section / 16) % 2) ^ ((lives%2) * 2) ^ 1;<br/>
+	digits[5] = ((lives / 2) % 4) ^ 3;<br/>
+	digits[6] = ((lives / 8) % 4) ^ 1;<br/>
+	digits[7] = credits % 4;<br/>
+	<br/>
+	digits[0] = digits[2] ^ digits[4] ^ digits[6] ^ 2;<br/>
+	digits[1] = digits[3] ^ digits[5] ^ digits[7];
+	</code>
+
+	<p>The resulting 0s, 1s, 2s and 3s are then converted to Ts, Cs, Ss and Xs respectively, to represent the appropriate Playstation buttons comprising the generated password. (Triangle, Circle, Square and X)</p>
+	<p>All of the meaningful data is contained in the last 6 characters. The first 2 are essentially a partiy check, their value determined by the values of the other characters.</p>
+	<p>Also, while the password structure can refer to sections up to 31, the game automatically dismisses such codes because there are no sections past 22.</p>
+	<!--
+	<h3>To use:</h3>
+	<p>Enter the desired Section, Lives and Credits in the textboxes below, and click the Generate button. Generated passwords will appear in the table.</p>
+	-->
+	<h3>Some things to be aware of:</h3>
+	<ul>
+		<li>The main game runs from sections 1 to 21. Section 22 is the bonus round. If you start in the bonus round, you will never progress past it.</li>
+		<li>You need at least 1 life to play. If you select 0 lives and at least 1 credit, you will start on the 'Continue?' screen. Selecting 'yes' will start you on the selected section with 3 lives and one fewer credits.</li>
+		<li>if you select 0 lives and 0 credits, since Lomax does not have a game-over screen, all it will do is reset the title screen.</li>
+	</ul>
+	<hr/>
+	<a href="index.htm">Back to WLivi's retro game password generators</a>
+</body>
+</html>

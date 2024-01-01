@@ -1,0 +1,301 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+	<meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+	<title>Bomberman II password generator</title>
+	<script type="text/javascript" language="JavaScript">
+
+function equalArrays(a1, a2) {
+	if (a1.length != a2.length) return 0;
+	for (var i = 0; i < a1.length; ++i) {if (a1[i] != a2[i]) {return 0;}}
+	return 1;
+}
+
+function getEncoding(version) {
+	var encoding;
+	if (version == "US") { encoding = new Array("1","2","3","4","5","6","7","8","B","C","D","F","G","H","J","K"); }
+	else if (version == "JP") { encoding = new Array("A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"); }
+	else { alert("Encoding Error: Unrecognised version"); }
+	return encoding;
+}
+
+function applyEncoding(encoding, digits) {
+	for (var i = 0; i < digits.length; ++i) { digits[i] = encoding[digits[i]]; }
+	return digits;
+}
+
+function removeEncoding(encoding, digits) {
+	var ei, di, done = 0;
+	for (di = 0; di < digits.length; ++di) {
+		for (ei = 0; ei < encoding.length; ++ei) {
+			if (digits[di] == encoding[ei]) {digits[di] = ei; break;}
+		}
+		if (ei == encoding.length) {alert("Invalid Password"); return;}
+	}
+	return digits;
+}
+
+function getMissingConversion() {
+	return new Array(0,1,4,6,12,11,9,3,13,10,2,15,8,7,14,5);
+}
+
+function fillDigits(area1, area2, bombs, size, base, val1, val2) {
+	return new Array(base, area1, area2, (area1 + area2 + bombs + size + val1 + val2) % 16, bombs, val1, size, val2);
+}
+
+function applyBase(digits) {
+	for (var i = 1; i < digits.length; ++i) { digits[i] ^= digits[0]; }
+	return digits;
+}
+
+function generatePassword(a1, a2, b, s, base, value1, value2, version) {
+	var digits = applyEncoding(getEncoding(version),applyEncoding(getMissingConversion(),applyBase(fillDigits(a1-1, a2-1, b-1, s-1, base, value1, value2))));
+	var password = "";
+	for (var i = 0; i < digits.length; ++i) {password += digits[i];}
+	return password;
+}
+
+function showPassword(form, table) {
+	var a1, a2, b, s, base, val1, val2, version, pass, desc;
+	a1 = parseInt(form.area1.value);
+	if (isNaN(a1) || a1 < 1 || a1 > 6) {
+		alert("Invalid Area");
+		return;
+	}
+	a2 = parseInt(form.area2.value);
+	if (isNaN(a2) || a2 < 1 || a2 > 8) {
+		alert("Invalid Area");
+		return;
+	}
+	b = parseInt(form.bombs.value);
+	if (isNaN(b) || b < 1 || b > 8) {
+		alert("Invalid Bombs");
+		return;
+	}
+	s = parseInt(form.size.value);
+	if (isNaN(s) || s < 1 || s > 5) {
+		alert("Invalid Size");
+		return;
+	}
+	base = parseInt(form.base.value);
+	if (isNaN(base) || base < 0 || base > 15) {
+		alert("Invalid Base");
+		return;
+	}
+	val1 = parseInt(form.value1.value);
+	if (isNaN(val1) || val1 < 0 || val1 > 15) {
+		alert("Invalid Value 1");
+		return;
+	}
+	val2 = parseInt(form.value2.value);
+	if (isNaN(val2) || val2 < 0 || val2 > 15) {
+		alert("Invalid Value 2");
+		return;
+	}
+	version = form.version.value.toUpperCase();
+	if (version != "US" && version != "JP") {
+		alert("Invalid Version");
+		return;
+	}
+	desc = "Area " + a1 + "-" + a2 + ", Bombs " + b + ", Size " + s + " (" + version + ")";
+	pass = generatePassword(a1,a2,b,s,base,val1,val2,version);
+	form.password.value = pass;
+	addPass(table, pass, desc);
+	return;
+}
+
+function addPass(table, pass, desc)
+{
+	var lastRow = table.rows.length;
+	var row = table.insertRow(lastRow);
+	var passCell = row.insertCell(0);
+	var passNode = document.createTextNode(pass);
+	passCell.appendChild(passNode);
+	var descCell = row.insertCell(1);
+	var descNode = document.createTextNode(desc);
+	descCell.appendChild(descNode);
+	return;
+}
+
+function detectSecrets (digits) {
+	if (equalArrays(digits,new Array(15,2,3,11,5,6,0,1)) == 1) return "Sound Room";
+	if (equalArrays(digits,new Array(15,14,13,4,9,0,2,10)) == 1) return "Bonus Stage";
+	if (equalArrays(digits,new Array(15,1,14,12,1,0,2,4)) == 1) return "Short Primer Time";
+	if (equalArrays(digits,new Array(15,1,14,12,1,12,0,13)) == 1) return "Normal Primer Time";
+	if (equalArrays(digits,new Array(15,1,14,12,1,14,11,3)) == 1) return "Long Primer Time";
+	if (equalArrays(digits,new Array(15,0,2,7,8,13,10,14)) == 1) return "Manual Detonator";
+	if (equalArrays(digits,new Array(15,0,13,8,2,12,0,13)) == 1) return "Semi-Manual Detonator";
+	return "";
+}
+
+function readPassword (form, table) {
+	var password = form.password.value.toUpperCase();
+	var version = form.version.value.toUpperCase();
+	if (version != "US" && version != "JP") {
+		alert("Invalid Version");
+		return;
+	}
+	var digits = new Array();
+	var chk = 16;
+	var report = "Checksum: ";
+	var valid = true;
+	var doreport = false;
+	var a1,a2,b,s,i, desc;
+
+	for (i = 0; i < 8; ++i) { digits[i] = password.substring(i, i+1); }
+	desc=detectSecrets(digits=removeEncoding(getEncoding(version),digits));
+	if (desc != "") {
+		addPass(table, password, desc + " (" + version + ")");
+		return;
+	}
+	digits=applyBase(removeEncoding(getMissingConversion(),digits));
+	a1 = digits[1] + 1;	a2 = digits[2] + 1;	b = digits[4] + 1;	s = digits[6] + 1;
+	desc = "Area " + a1 + "-" + a2 + ", Bombs " + b + ", Size " + s + " (" + version + ")";
+
+	for (i = 1; i < 8; ++i) {
+		chk += digits[i];
+	}
+	chk -= digits[3];
+	chk %= 16;
+	if (chk != digits[3]) {
+		report += "in";
+		doreport = true;
+	}
+	chk = getEncoding(version)[getMissingConversion()[chk^digits[0]]];
+	report += "valid (should be " + chk + ")\nArea1: ";
+	if (a1 > 6) {
+		report += "in";
+		valid = false;
+	}
+	report += "valid\nArea2: ";
+	if (a2 > 8) {
+		report += "in";
+		valid = false;
+	}
+	report += "valid\nBombs: ";
+	if (b > 8) {
+		report += "in";
+		valid = false;
+	}
+	report += "valid\nSize: ";
+	if (s > 5) {
+		report += "in";
+		valid = false;
+	}
+	report += "valid\n" + desc;
+	
+	form.area1.value = a1;
+	form.area2.value = a2;
+	form.bombs.value = b;
+	form.size.value = s;
+	form.base.value = digits[0];
+	form.value1.value = digits[5];
+	form.value2.value = digits[7];
+	form.password.value = password = password.substring(0, 3) + chk + password.substring(4, 8);
+
+	if (valid) {
+		addPass(table, password, desc);
+	}
+	if (doreport || !valid) {
+		alert(report);
+	}
+	return;
+}
+
+function convertPassword(form) {
+	var digits = new Array();
+	var pass = form.password.value.toUpperCase();
+	var x, y;
+	var ver = form.version.value.toUpperCase();
+	if (ver != "US" && ver != "JP") {
+		alert("Invalid Version");
+		return;
+	}
+	var otherver;
+	if (ver == "US") {
+		otherver = "JP";
+	} else {
+		otherver = "US";
+	}
+	for (x = 0; x < pass.length; ++x) {
+		digits[x] = pass.substring(x, x+1);
+	}
+	digits = applyEncoding(getEncoding(otherver),removeEncoding(getEncoding(ver),digits));
+	pass = "";
+	for (y = 0; y < x; ++y) {
+		pass += digits[y];
+	}
+	form.password.value = pass;
+	form.version.value = otherver;
+	return;
+}
+
+	</script>
+</head>
+<body>
+	<h1>Bomberman II password generator</h1>
+	<h2>by WLivi</h2>
+	<p>changes in version 2.1: (2024-01-01)</p>
+	<ul>
+		<li>text updates</li>
+		<li>parsing valid passwords no longer causes an alert</li>
+		<li>Github upload</li>
+	</ul>
+	<h3>This password generator requires Javascipt</h3>
+	<hr/>
+	<form id="passForm" action="">
+		Game version: <input type="text" name="version" value="US"> (US/JP)<br/>
+		Game data:
+		<ul>
+			<li>Area: <input type="text" name="area1" value="1"> (1-6) <input type="text" name="area2" value="1"> (1-8)</li>
+			<li>Bombs: <input type="text" name="bombs" value="1"> (1-8)</li>
+			<li>Size: <input type="text" name="size" value="1"> (1-5)</li>
+		</ul>
+		Coding:
+		<ul>
+			<li>Base: <input type="text" name="base" value="0"> (0-15)</li>
+			<li>Value 1: <input type="text" name="value1" value="0"> (0-15)</li>
+			<li>Value 2: <input type="text" name="value2" value="0"> (0-15)</li>
+		</ul>
+
+		<input type="button" name="generate" value="Generate" onclick="showPassword(this.form, document.getElementById('passList'))"><br><br>
+		Password: <input type="text" name="password" value="11111111"><br>
+		<input type="button" name="decode" value="Decode" onclick="readPassword(this.form, document.getElementById('passList'))">
+		<input type="button" name="convert" value="Convert" onclick="convertPassword(this.form)">
+	</form>
+	<table id="passList" rules="all">
+		<caption>Valid Passwords</caption>
+		<tr><th>Password</th><th>Effect</th></tr>
+	</table>
+	<script type="text/javascript" language="JavaScript">showPassword(document.getElementById('passForm'), document.getElementById('passList'))</script>
+	<hr/>
+	<p>This password generator is the net-result of a little project in 2006 after talking with Erickson Deveza, who's work formed the basis of my <a href="lomax.htm">Lomax password generator</a>. He mentioned some difficulties cracking Bomberman II's password system, and suggested I have a go... so I did.</p>
+	<p>Bomberman II records three meaningful pieces of game state in the password: Area, Number of bombs, Size of explosions. There are also two additional values which I never managed to identify, and a 'base' number which is XOR'd with all the other values. Lastly, there is a simple checksum.</p>
+	<p>At its core, the data is shaped like this:	 (remember, % means Modulo, ^ means XOR)</p>
+	<code>
+		digits[0] = base;<br>
+		digits[1] = base ^ (area1 - 1);<br>
+		digits[2] = base ^ (area2 - 1);<br>
+		digits[3] = base ^ (area1+area2+bombs+size+val1+val2-4)%16;<br>
+		digits[4] = base ^ (bombs - 1);<br>
+		digits[5] = base ^ val1;<br>
+		digits[6] = base ^ (size - 1);<br>
+		digits[7] = base ^ val2;
+	</code>
+	<p>These values are then run through an obtuse conversion function:</p>
+	<table>
+		<tr align="right"><th>Before</th><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td></tr>
+		<tr align="right"><th>After</th><td>0</td><td>1</td><td>4</td><td>6</td><td>12</td><td>11</td><td>9</td><td>3</td><td>13</td><td>10</td><td>2</td><td>15</td><td>8</td><td>7</td><td>14</td><td>5</td></tr>
+	</table>
+	<p>Lastly it's presented using the character set appropriate for your version of the game:</p>
+	<table>
+		<tr align="right"><th>Raw</th><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td></tr>
+		<tr align="right"><th>US</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>B</td><td>C</td><td>D</td><td>F</td><td>G</td><td>H</td><td>J</td><td>K</td></tr>
+		<tr align="right"><th>JP</th><td>A</td><td>B</td><td>C</td><td>D</td><td>E</td><td>F</td><td>G</td><td>H</td><td>I</td><td>J</td><td>K</td><td>L</td><td>M</td><td>N</td><td>O</td><td>P</td></tr>
+	</table>
+	<p>In addition to these algorithmically generated codes, Bomberman II also recognize a handful of special, hard-coded passwords, for things like the Sound Room and the Bonus Stage.  The password decoder here should recognize if you enter these codes.</p>
+	<p>Enjoy!</p>
+	<hr/>
+	<a href="index.htm">Back to WLivi's retro game password generators</a>
+	</body>
+</html>
